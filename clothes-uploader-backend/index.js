@@ -1,78 +1,72 @@
- const express = require('express');
+const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
-const fs = require('fs');
+const mongoose = require('mongoose');
+const dotenv = require('dotenv');
 const path = require('path');
+const fs = require('fs');
+
+const Clothes = require('./models/Clothes');
+dotenv.config();
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-const clothesDataPath = path.join(__dirname, 'clothes.json');
-
-// Enable CORS for frontend access
 app.use(cors());
 app.use(express.json());
-
-// Serve static files (uploaded images)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Multer configuration for file upload
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  })
+  .then(() => console.log('✅ MongoDB connected'))
+  .catch((err) => console.error('❌ MongoDB error:', err));
+
+// Multer config
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = 'uploads/';
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath);
-    }
-    cb(null, uploadPath);
+    const dir = 'uploads/';
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+    cb(null, dir);
   },
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + '-' + file.originalname;
-    cb(null, uniqueName);
-  },
+    cb(null, Date.now() + '-' + file.originalname);
+  }
 });
-
 const upload = multer({ storage });
 
-// Route to handle uploading clothes
-app.post('/upload-clothes', upload.array('images', 10), (req, res) => {
+// Upload clothes
+app.post('/upload-clothes', upload.array('images', 10), async (req, res) => {
   const { season, gender, type, subType } = req.body;
-  const files = req.files.map((file) => ({
+  const files = req.files.map(file => ({
     filename: file.filename,
-    path: `http://192.168.158.139:5000/uploads/${file.filename}`,
+    path: `http://192.168.158.139:5000/uploads/${file.filename}` // Use your local IP here
   }));
 
-  const newEntry = {
-    id: Date.now(),
-    season,
-    gender,
-    type,
-    subType,
-    images: files,
-  };
-
-  let clothes = [];
-  if (fs.existsSync(clothesDataPath)) {
-    clothes = JSON.parse(fs.readFileSync(clothesDataPath, 'utf8'));
+  try {
+    const newClothes = new Clothes({
+      season, gender, type, subType, images: files
+    });
+    await newClothes.save();
+    res.status(201).json({ message: 'Upload successful', entry: newClothes });
+  } catch (err) {
+    console.error('❌ Upload error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
-
-  clothes.push(newEntry);
-  fs.writeFileSync(clothesDataPath, JSON.stringify(clothes, null, 2));
-
-  console.log('✅ Upload received:', newEntry);
-  res.status(201).json({ message: 'Upload successful', entry: newEntry });
 });
 
-// Route to get all uploaded clothes
-app.get('/clothes', (req, res) => {
-  if (fs.existsSync(clothesDataPath)) {
-    const clothes = JSON.parse(fs.readFileSync(clothesDataPath, 'utf8'));
+// Get all clothes
+app.get('/clothes', async (req, res) => {
+  try {
+    const clothes = await Clothes.find().sort({ createdAt: -1 });
     res.json(clothes);
-  } else {
-    res.json([]);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch clothes' });
   }
 });
 
-// Start the server
 app.listen(PORT, () => {
-  console.log(`🚀 Server is running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
