@@ -1,0 +1,15 @@
+[
+  {
+    "id": 1752345407251,
+    "season": "summer",
+    "gender": "female",
+    "type": "bottom-wear",
+    "subType": "Lower",
+    "images": [
+      {
+        "filename": "1752345407159-photo_0.jpg",
+        "path": "http://192.168.158.139:5000/uploads/1752345407159-photo_0.jpg"
+      }
+    ]
+  }
+]
